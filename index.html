@@ -1984,8 +1984,8 @@ function drawPathTo(targetSeat, retry = 0) {
     return;
   }
 
-  // === 短路 1: 员工-40 = 你所在位置自身,不画路径 ===
-  if (targetSeat === 'B40') {
+  // === 短路 1: 你所在位置自身,不画路径 ===
+  if (targetSeat === 'B36') {
     svg.innerHTML = '';
     return;
   }
@@ -2008,8 +2008,8 @@ function drawPathTo(targetSeat, retry = 0) {
     return;
   }
 
-  // 起点: 从红点偏出, B37/B38/B39 用 3px, 其余用 14px
-  const startPad = (targetSeat === 'B37' || targetSeat === 'B38' || targetSeat === 'B39') ? 3 : 14;
+  // 起点: 从红点偏出, B33/B34/B35 用 3px, 其余用 14px
+  const startPad = (targetSeat === 'B33' || targetSeat === 'B34' || targetSeat === 'B35') ? 3 : 14;
   const startCx = sCx + (eCx >= sCx ? startPad : -startPad);
 
   // 决定走法
@@ -2206,11 +2206,11 @@ function renderFloorPlan(highlightSeat) {
         <div class="fp-desk-row" style="margin-bottom: 20px;">${ds('B21')}${d('B22')}${d('B23')}${d('B24')}</div>
         <div class="fp-desk-row">${d('B25')}${d('B26')}${d('B27')}${d('B28')}</div>
         <div class="fp-desk-row" style="margin-bottom: 20px;">${d('B29')}${d('B30')}${d('B31')}${d('B32')}</div>
-        <div class="fp-desk-row">${d('B33')}${d('B34')}${d('B35')}${d('B36')}</div>
-        <div class="fp-desk-row" style="margin-bottom: 20px;">
-          ${d('B37')}${d('B38')}${d('B39')}${d('B40')}
+        <div class="fp-desk-row">
+          ${d('B33')}${d('B34')}${d('B35')}${d('B36')}
           <span class="you-here-marker" title="你在这里"></span>
         </div>
+        <div class="fp-desk-row" style="margin-bottom: 20px;">${d('B37')}${d('B38')}${d('B39')}${d('B40')}</div>
         <div class="fp-desk-row">${d('B41')}${d('B42')}${d('B43')}${d('B44')}</div>
         <div class="fp-desk-row">${d('B45')}${d('B46')}${d('B47')}${d('B48')}</div>
       </div>
