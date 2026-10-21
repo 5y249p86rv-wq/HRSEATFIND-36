@@ -1695,6 +1695,26 @@ const pageMap = document.getElementById('pageMap');
 
 let currentPerson = null;
 
+// ========== 座位表空闲自动返回 ==========
+let mapIdleTimer = null;
+const MAP_IDLE_MS = 2 * 60 * 1000; // 停留 2 分钟自动返回首页
+
+function stopMapIdleTimer() {
+  if (mapIdleTimer) { clearTimeout(mapIdleTimer); mapIdleTimer = null; }
+}
+
+function startMapIdleTimer() {
+  stopMapIdleTimer();
+  mapIdleTimer = setTimeout(goToHome, MAP_IDLE_MS);
+}
+
+// 用户在座位表页面有任何操作时重置倒计时，连续 2 分钟无操作自动返回
+['pointerdown', 'touchstart', 'mousedown', 'keydown', 'wheel', 'scroll'].forEach((evt) => {
+  document.addEventListener(evt, () => {
+    if (!pageMap.classList.contains('hidden')) startMapIdleTimer();
+  }, { passive: true });
+});
+
 function goToMap(person = null) {
   currentPerson = person;
 
@@ -1714,9 +1734,13 @@ function goToMap(person = null) {
   renderFloorPlan(person ? person.seat : null);
   document.getElementById('searchInput').value = '';
   hideSuggestions();
+
+  startMapIdleTimer();
 }
 
 function goToHome() {
+  stopMapIdleTimer();
+
   pageMap.classList.add('hidden');
   pageHome.classList.add('center');
 
