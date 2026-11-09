@@ -1868,6 +1868,7 @@ searchInput.addEventListener('input', () => {
 // 用 pointerdown 主动 focus,绕过这个已知 bug。
 ['pointerdown', 'touchstart'].forEach(evt => {
   searchInput.addEventListener(evt, () => {
+    if (IS_IOS_PWA) searchInput.removeAttribute('readonly');
     if (document.activeElement !== searchInput) {
       // 延一帧,避免某些 iOS 版本吞掉紧随其后的 focus
       setTimeout(() => searchInput.focus(), 0);
@@ -2135,8 +2136,11 @@ function drawPathTo(targetSeat, retry = 0) {
   const drawPaths = svg.querySelectorAll('path');
   const drawLengths = Array.from(drawPaths).map(p => p.getTotalLength());
 
-  // SVG 未完成布局时 getTotalLength 可能为 0，此时跳过渐进动画，直接用 CSS 默认虚线显示
+  // SVG 未完成布局时 getTotalLength 可能为 0，此时稍后重试（等布局稳定）
   if (drawLengths.some(len => !len || len <= 0)) {
+    if (retry < 6) {
+      setTimeout(() => drawPathTo(targetSeat, retry + 1), 120);
+    }
     return;
   }
 
@@ -2152,14 +2156,11 @@ function drawPathTo(targetSeat, retry = 0) {
     }
   });
 
-  // 两帧 rAF 确保上面的初始状态提交了再开 transition
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      drawPaths.forEach(p => {
-        p.style.transition = `stroke-dashoffset ${ANIM_MS}ms ease-out`;
-        p.style.strokeDashoffset = '0';
-      });
-    });
+  // 强制 reflow，确保初始隐藏状态已提交，再触发过渡动画（不依赖 rAF，iOS 挂起恢复后更稳）
+  void drawPaths[0].getBoundingClientRect();
+  drawPaths.forEach(p => {
+    p.style.transition = `stroke-dashoffset ${ANIM_MS}ms ease-out`;
+    p.style.strokeDashoffset = '0';
   });
 
   // 动画结束后还原虚线 + pulse 流光
@@ -2255,10 +2256,8 @@ function renderFloorPlan(highlightSeat) {
     <svg id="fpPathSvg" class="fp-path-svg"></svg>
   `;
   document.getElementById('floorPlan').innerHTML = html;
-  // 等一帧再画 SVG 路径: SVG 刚插入 DOM 还没 layout,
-  // 此时 svg.getScreenCTM() 会返回 null 或错的 transform,
-  // 导致 path 落到错位置. requestAnimationFrame 确保 layout 完成.
-  requestAnimationFrame(() => {
+  // 用 setTimeout 替代 rAF：等 DOM 布局完成后画路径（iOS 挂起恢复后 setTimeout 比 rAF 更可靠）
+  setTimeout(() => {
     // D1 顶部对齐 M1 顶部: floor-plan rotate(90°) 顺时针, 屏幕 Y 对应 layout -X.
     const d1 = document.querySelector('[data-seat="D1"]');
     const m1 = document.querySelector('[data-seat="M1"]');
@@ -2267,10 +2266,11 @@ function renderFloorPlan(highlightSeat) {
       const mRect = m1.getBoundingClientRect();
       const dy = dRect.top - mRect.top;
       d1.style.marginLeft = (-dy * 2) + 'px';
+      // 强制 reflow, 让 D1 的新 marginLeft 生效后再画路径 (此时 eRect 才是新位置)
+      void d1.getBoundingClientRect();
     }
-    // 再等一帧, 让 D1 的新 marginLeft 生效后再画路径 (此时 eRect 才是新位置)
-    requestAnimationFrame(() => drawPathTo(highlightSeat));
-  });
+    drawPathTo(highlightSeat);
+  }, 0);
 }
 
 // 座位点击
@@ -2673,12 +2673,22 @@ renderHistory();
 renderFloorPlan(null);
 if (!IS_IOS_PWA) searchInput.focus();
 
-// 页面重新可见时，若停留在座位表页，重建寻位动画（iOS 挂起后 rAF/CSS 动画可能失效）
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && !pageMap.classList.contains('hidden')) {
+// iOS PWA：默认 readonly，避免脚本 focus 造成假聚焦；点击时移除并 focus
+if (IS_IOS_PWA) searchInput.setAttribute('readonly', 'readonly');
+
+// 页面恢复可见时重建座位表与寻位动画（iOS 挂起后 rAF/CSS 动画可能失效）
+function resumeFloorPlan() {
+  if (!pageMap.classList.contains('hidden')) {
     renderFloorPlan(currentPerson ? currentPerson.seat : null);
   }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') resumeFloorPlan();
 });
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) resumeFloorPlan();
+});
+window.addEventListener('focus', resumeFloorPlan);
 
 // iOS PWA standalone keyboard fix
 searchInput.addEventListener('touchstart', function(e) {
@@ -2686,9 +2696,8 @@ searchInput.addEventListener('touchstart', function(e) {
 }, { passive: true });
 
 searchInput.addEventListener('click', function() {
+  if (IS_IOS_PWA) this.removeAttribute('readonly');
   this.focus();
-  // readonly toggle trick for iOS PWA
-  this.removeAttribute('readonly');
 });
 
 // ========== Register PWA service worker ==========
