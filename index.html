@@ -1715,6 +1715,9 @@ function startMapIdleTimer() {
   }, { passive: true });
 });
 
+// iOS PWA standalone: 非用户手势触发 focus 会进入"假聚焦"状态（键盘不弹）
+const IS_IOS_PWA = window.navigator.standalone === true;
+
 function goToMap(person = null) {
   currentPerson = person;
 
@@ -1748,7 +1751,8 @@ function goToHome() {
   pageHome.classList.remove('center');
 
   currentPerson = null;
-  document.getElementById('searchInput').focus();
+  const input = document.getElementById('searchInput');
+  if (IS_IOS_PWA) input.blur(); else input.focus();
 }
 
 document.getElementById('backBtn').addEventListener('click', goToHome);
@@ -2130,6 +2134,11 @@ function drawPathTo(targetSeat, retry = 0) {
   const ANIM_MS = 850;
   const drawPaths = svg.querySelectorAll('path');
   const drawLengths = Array.from(drawPaths).map(p => p.getTotalLength());
+
+  // SVG 未完成布局时 getTotalLength 可能为 0，此时跳过渐进动画，直接用 CSS 默认虚线显示
+  if (drawLengths.some(len => !len || len <= 0)) {
+    return;
+  }
 
   drawPaths.forEach((p, i) => {
     // 先记下原虚线样式，动画结束后还原
@@ -2662,7 +2671,14 @@ document.addEventListener('keydown', e => {
 // ========== 初始化 ==========
 renderHistory();
 renderFloorPlan(null);
-searchInput.focus();
+if (!IS_IOS_PWA) searchInput.focus();
+
+// 页面重新可见时，若停留在座位表页，重建寻位动画（iOS 挂起后 rAF/CSS 动画可能失效）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !pageMap.classList.contains('hidden')) {
+    renderFloorPlan(currentPerson ? currentPerson.seat : null);
+  }
+});
 
 // iOS PWA standalone keyboard fix
 searchInput.addEventListener('touchstart', function(e) {
